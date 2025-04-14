@@ -159,7 +159,7 @@ def simulate(u, v, p, dx, dy, dt, t_end, nu, rho, save_interval=100, csv_file_pr
 
     return u, v, p
 
-def postprocess(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.0):
+def velocity_magnitude(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.0):
     dx, dy = Lx / Nx, Ly / Ny
     x = np.linspace(0, Lx, Nx+1)
     y = np.linspace(0, Ly, Ny+1)
@@ -176,7 +176,7 @@ def postprocess(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.0):
         v_data = np.expand_dims(v_data, axis=0)
         p_data = np.expand_dims(p_data, axis=0)
 
-    os.makedirs("frames", exist_ok=True)
+    os.makedirs("velocity_magnitude", exist_ok=True)
 
     for idx in range(u_data.shape[0]):
         u = u_data[idx].reshape((Nx+1, Ny+1))
@@ -207,24 +207,70 @@ def postprocess(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.0):
         plt.tight_layout()
 
         # Save each frame
-        plt.savefig(f"frames/frame_{idx:04d}.png")
+        plt.savefig(f"velocity_magnitude/vel_mag_{idx:04d}.png")
         plt.close()
 
-    print("Postprocessing complete. Frames saved in ./frames/")
+    print("  > Velocity field complete. Frames saved in ./velocity_magnitude/")
 
-def make_gif(frame_folder="frames", output_gif="simulation.gif", fps=5):
-    # Collect all frame filenames and sort them
-    frame_files = sorted([f for f in os.listdir(frame_folder) if f.endswith(".png")])
-    images = []
+def pressure_isolines(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.0):
+    dx, dy = Lx / Nx, Ly / Ny
+    x = np.linspace(0, Lx, Nx+1)
+    y = np.linspace(0, Ly, Ny+1)
+    X, Y = np.meshgrid(x, y, indexing='ij')
 
-    for filename in frame_files:
-        filepath = os.path.join(frame_folder, filename)
-        images.append(imageio.v2.imread(filepath))  # Use v2 to avoid deprecation warning
+    # Load CSV data
+    p_data = np.loadtxt(f"{csv_prefix}_p.csv", delimiter=",")
 
-    # Save as GIF
-    imageio.mimsave(output_gif, images, fps=fps)
-    print(f"GIF saved as {output_gif}")
+    # Ensure data is 2D: (frames, flattened field)
+    if p_data.ndim == 1:
+        p_data = np.expand_dims(p_data, axis=0)
 
+    os.makedirs("pressure_isolines", exist_ok=True)
+
+    for idx in range(p_data.shape[0]):
+        p = p_data[idx].reshape((Nx+1, Ny+1))
+
+        plt.figure(figsize=(10, 8))
+
+        # Filled background pressure field
+        filled = plt.contourf(X, Y, p, levels=50, cmap='coolwarm')
+        cbar = plt.colorbar(filled, label='Pressure', fraction=0.046, pad=0.04)
+        cbar.ax.tick_params(labelsize=12)
+        cbar.set_label('Pressure', fontsize=14)
+
+        # Pressure isolines
+        lines = plt.contour(X, Y, p, levels=20, colors='black', linewidths=0.5)
+        plt.clabel(lines, inline=True, fontsize=10, fmt="%.2f")
+
+        # Titles and labels
+        plt.title(f"Pressure Field & Isolines (t = {(idx + 1)*dt*100})", fontsize=18)
+        plt.xlabel("x", fontsize=14)
+        plt.ylabel("y", fontsize=14)
+
+        plt.xticks(fontsize=12)
+        plt.yticks(fontsize=12)
+        plt.axis('equal')
+        plt.tight_layout()
+
+        # Save frame
+        plt.savefig(f"pressure_isolines/p_isolines_{idx:04d}.png")
+        plt.close()
+
+    print("  > Pressure field complete. Frames saved in ./pressure_isolines/")
+
+def make_gif(fps=10):
+    for folder in os.listdir("."):
+        if os.path.isdir(folder):
+            frame_files = sorted([f for f in os.listdir(folder) if f.endswith(".png")])
+            if frame_files:
+                images = []
+                for filename in frame_files:
+                    filepath = os.path.join(folder, filename)
+                    images.append(imageio.v2.imread(filepath))  # Avoid deprecation warning
+
+                output_gif = f"{folder}.gif"
+                imageio.mimsave(output_gif, images, fps=fps)
+                print(f"  > GIF saved as {output_gif}")
 
 ############################################################################################################
 
@@ -238,7 +284,7 @@ dt = 0.001
 t_end = 1.0
 nu = 0.01  # kinematic viscosity
 rho = 1.0  # density
-'''
+
 # Grid
 x = np.linspace(0, Lx, Nx+1)
 y = np.linspace(0, Ly, Ny+1)
@@ -249,10 +295,18 @@ u = np.zeros((Nx+1, Ny+1))  # x-velocity
 v = np.zeros((Nx+1, Ny+1))  # y-velocity
 p = np.zeros((Nx+1, Ny+1))  # pressure
 
-# SIMULATION ###############################################################################################
-u, v = apply_boundary_conditions(u, v)
-u_final, v_final, p_final = simulate(u, v, p, dx, dy, dt, t_end, nu, rho)
-'''
+# Check for existing .csv files
+csv_files_exist = any(file.endswith('.csv') for file in os.listdir('.') if file.startswith('simulation_data'))
+
+if csv_files_exist:
+    print("  > u, v, P data found, skipping simulation and proceeding to postprocessing...")
+else:
+    print("  > No data found, running simulation...")
+    # SIMULATION ###############################################################################################
+    u, v = apply_boundary_conditions(u, v)
+    u_final, v_final, p_final = simulate(u, v, p, dx, dy, dt, t_end, nu, rho)
+
 # POSTPROCESSING ###########################################################################################
-postprocess(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.0)
-make_gif(frame_folder="frames", output_gif="simulation.gif", fps=10)
+velocity_magnitude(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.0)
+pressure_isolines(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.0)
+make_gif(fps=10)
