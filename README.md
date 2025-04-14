@@ -22,28 +22,22 @@ The lid-driven cavity problem is a classic benchmark problem in computational fl
 
 - **Momentum Equations (Intermediate velocity)**
   
-  \[
-  \frac{\partial \vec{u}}{\partial t} + (\vec{u} \cdot \nabla)\vec{u} = -\nabla p + \nu \nabla^2 \vec{u}
-  \]
+  $$\frac{\partial \vec{u}}{\partial t} + (\vec{u} \cdot \nabla)\vec{u} = -\nabla p + \nu \nabla^2 \vec{u}$$
 
 - **Incompressibility Constraint**
 
-  \[
-  \nabla \cdot \vec{u} = 0
-  \]
+  $$\nabla \cdot \vec{u} = 0$$
 
 - **Projection Method**
   
   Intermediate velocity is projected onto a divergence-free space by solving the **Pressure Poisson Equation**:
 
-  \[
-  \nabla^2 p = \frac{\rho}{\Delta t} \nabla \cdot \vec{u}^*
-  \]
+  $$\nabla^2 p = \frac{\rho}{\Delta t} \nabla \cdot \vec{u}^*$$
 
 ### Boundary Conditions
 
-- Top wall: \( u = 1 \), \( v = 0 \) (moving lid)
-- Other walls: \( u = 0 \), \( v = 0 \)
+- Top wall: $(u = 1)$, $( v = 0)$ (moving lid)
+- Other walls: $(u = 0)$, $(v = 0)$
 
 ## How to Run
 
