@@ -46,8 +46,27 @@ def RHS(u, v, dx, dy, nu):
 
     return dudt, dvdt
 
+# Runge-Kutta 3 (Shu-Osher form)
+def RK3(u, v, dt, dx, dy, nu):
+    # Stage 1
+    dudt1, dvdt1 = RHS(u, v, dx, dy, nu)
+    u1 = u + dt * dudt1
+    v1 = v + dt * dvdt1
+
+    # Stage 2
+    dudt2, dvdt2 = RHS(u1, v1, dx, dy, nu)
+    u2 = 0.75 * u + 0.25 * (u1 + dt * dudt2)
+    v2 = 0.75 * v + 0.25 * (v1 + dt * dvdt2)
+
+    # Stage 3
+    dudt3, dvdt3 = RHS(u2, v2, dx, dy, nu)
+    u_new = (1.0 / 3.0) * u + (2.0 / 3.0) * (u2 + dt * dudt3)
+    v_new = (1.0 / 3.0) * v + (2.0 / 3.0) * (v2 + dt * dvdt3)
+
+    return u_new, v_new
+
 # Runge-Kutta 4
-def rk4_step(u, v, dt, dx, dy, nu):
+def RK4(u, v, dt, dx, dy, nu):
     dudt1, dvdt1 = RHS(u, v, dx, dy, nu)
     u1 = u + 0.5 * dt * dudt1
     v1 = v + 0.5 * dt * dvdt1
@@ -121,16 +140,21 @@ def correct_velocity(u_star, v_star, p, dx, dy, rho, dt):
     
     return u, v
 
-def simulate(u, v, p, dx, dy, dt, t_end, nu, rho, save_interval=100, save_dir="sim_data_npz"):
+def simulate(u, v, p, dx, dy, dt, t_end, nu, rho, method, save_interval=100, save_dir="sim_data_npz"):
     t = 0.0
     step = 0
     frame = 0
 
     os.makedirs(save_dir, exist_ok=True)
+
+    if method == 'RK3':
+        time_stepper = RK3
+    else:
+        time_stepper = RK4
     
     while t < t_end:
-        # Step 1: RK4 intermediate velocity (u*, v*)
-        u_star, v_star = rk4_step(u, v, dt, dx, dy, nu)
+        # Step 1: RK intermediate velocity (u*, v*)
+        u_star, v_star = time_stepper(u, v, dt, dx, dy, nu)
 
         # Step 2: Apply boundary conditions to intermediate velocity
         u_star, v_star = apply_boundary_conditions(u_star, v_star)
@@ -336,15 +360,14 @@ v = np.zeros((Nx+1, Ny+1))  # y-velocity
 p = np.zeros((Nx+1, Ny+1))  # pressure
 
 # Check for existing .npz simulation data
-npz_dir = "sim_data_npz"
-data_files_exist = os.path.exists(npz_dir) and any(f.endswith(".npz") for f in os.listdir(npz_dir))
+data_files_exist = os.path.exists("sim_data_npz") and any(f.endswith(".npz") for f in os.listdir("sim_data_npz"))
 
 if data_files_exist:
-    print("  > Binary data found, skipping simulation and proceeding to postprocessing...")
+    print("  > Binary data found, skipping asimulation and proceeding to postprocessing...")
 else:
     print("  > No data found, running simulation...")
     u, v = apply_boundary_conditions(u, v)
-    u_final, v_final, p_final = simulate(u, v, p, dx, dy, dt, t_end, nu, rho, save_dir=npz_dir)
+    u_final, v_final, p_final = simulate(u, v, p, dx, dy, dt, t_end, nu, rho, method='RK4')
 
 # POSTPROCESSING ###########################################################################################
 plot_mesh(Lx, Ly, Nx, Ny)
