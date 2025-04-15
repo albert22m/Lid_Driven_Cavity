@@ -154,6 +154,43 @@ def simulate(u, v, p, dx, dy, dt, t_end, nu, rho, save_interval=100, save_dir="s
               frame += 1
     return u, v, p
 
+def plot_mesh(Lx, Ly, Nx, Ny, save_path="mesh.png"):
+    dx = Lx / Nx
+    dy = Ly / Ny
+
+    x = np.linspace(0, Lx, Nx+1)
+    y = np.linspace(0, Ly, Ny+1)
+    X, Y = np.meshgrid(x, y, indexing='ij')
+
+    plt.figure(figsize=(12, 12))
+    ax = plt.gca()
+    ax.set_facecolor('lightgray')
+    
+    # Dibuja líneas verticales de la malla
+    for xi in x:
+        plt.plot([xi]*len(y), y, color='black', linewidth=0.5)
+    
+    # Dibuja líneas horizontales de la malla
+    for yi in y:
+        plt.plot(x, [yi]*len(x), color='black', linewidth=0.5)
+
+    # Opcional: mostrar puntos de los nodos
+    plt.plot(X, Y, 'k.', markersize=2)
+
+    plt.title(f"Structured mesh {Nx}x{Ny}", fontsize=20)
+    plt.xlabel("x", fontsize=16)
+    plt.ylabel("y", fontsize=16)
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+
+    plt.gca().set_aspect('equal')
+    plt.xlim(0, Lx)
+    plt.ylim(0, Ly)
+    plt.grid(False)
+    plt.tight_layout()
+    plt.savefig(save_path)
+    plt.close()
+
 def velocity_magnitude(Nx, Ny, Lx, Ly, save_dir="sim_data_npz"):
     dx, dy = Lx / Nx, Ly / Ny
     x = np.linspace(0, Lx, Nx+1)
@@ -304,6 +341,7 @@ else:
     u_final, v_final, p_final = simulate(u, v, p, dx, dy, dt, t_end, nu, rho, save_dir=npz_dir)
 
 # POSTPROCESSING ###########################################################################################
+plot_mesh(Lx, Ly, Nx, Ny, save_path="mesh.png")
 velocity_magnitude(Nx, Ny, Lx, Ly, save_dir=npz_dir)
 pressure_isolines(Nx, Ny, Lx, Ly, save_dir=npz_dir)
 make_gif(fps=10)
