@@ -21,8 +21,9 @@ def apply_boundary_conditions(u, v):
 
     return u, v
 
+# Right-Hand Side
 @njit(parallel=True)
-def compute_rhs(u, v, dx, dy, nu):
+def RHS(u, v, dx, dy, nu):
     # Allocate arrays for du/dt and dv/dt
     dudt = np.zeros_like(u)
     dvdt = np.zeros_like(v)
@@ -45,20 +46,21 @@ def compute_rhs(u, v, dx, dy, nu):
 
     return dudt, dvdt
 
+# Runge-Kutta 4
 def rk4_step(u, v, dt, dx, dy, nu):
-    dudt1, dvdt1 = compute_rhs(u, v, dx, dy, nu)
+    dudt1, dvdt1 = RHS(u, v, dx, dy, nu)
     u1 = u + 0.5 * dt * dudt1
     v1 = v + 0.5 * dt * dvdt1
 
-    dudt2, dvdt2 = compute_rhs(u1, v1, dx, dy, nu)
+    dudt2, dvdt2 = RHS(u1, v1, dx, dy, nu)
     u2 = u + 0.5 * dt * dudt2
     v2 = v + 0.5 * dt * dvdt2
 
-    dudt3, dvdt3 = compute_rhs(u2, v2, dx, dy, nu)
+    dudt3, dvdt3 = RHS(u2, v2, dx, dy, nu)
     u3 = u + dt * dudt3
     v3 = v + dt * dvdt3
 
-    dudt4, dvdt4 = compute_rhs(u3, v3, dx, dy, nu)
+    dudt4, dvdt4 = RHS(u3, v3, dx, dy, nu)
 
     u_new = u + (dt / 6.0) * (dudt1 + 2*dudt2 + 2*dudt3 + dudt4)
     v_new = v + (dt / 6.0) * (dvdt1 + 2*dvdt2 + 2*dvdt3 + dvdt4)
