@@ -106,6 +106,7 @@ def solve_pressure_poisson(p, div, dx, dy, rho, dt, max_iter=1000, tol=1e-4, ome
         res = np.sqrt(res) / (p.shape[0] * p.shape[1])
         if res < tol:
             break
+    
     return p
 
 @njit(parallel=True)
@@ -117,6 +118,7 @@ def correct_velocity(u_star, v_star, p, dx, dy, rho, dt):
         for j in range(1, u.shape[1] - 1):
             u[i, j] -= dt / rho * (p[i+1, j] - p[i-1, j]) / (2 * dx)
             v[i, j] -= dt / rho * (p[i, j+1] - p[i, j-1]) / (2 * dy)
+    
     return u, v
 
 def simulate(u, v, p, dx, dy, dt, t_end, nu, rho, save_interval=100, save_dir="sim_data_npz"):
@@ -152,6 +154,7 @@ def simulate(u, v, p, dx, dy, dt, t_end, nu, rho, save_interval=100, save_dir="s
         if step % save_interval == 0:
               np.savez_compressed(f"{save_dir}/frame_{frame:04d}.npz", u=u, v=v, p=p)
               frame += 1
+    
     return u, v, p
 
 def plot_mesh(Lx, Ly, Nx, Ny, save_path="mesh.png"):
@@ -166,15 +169,15 @@ def plot_mesh(Lx, Ly, Nx, Ny, save_path="mesh.png"):
     ax = plt.gca()
     ax.set_facecolor('lightgray')
     
-    # Dibuja líneas verticales de la malla
+    # Draw vertical grid lines
     for xi in x:
         plt.plot([xi]*len(y), y, color='black', linewidth=0.5)
     
-    # Dibuja líneas horizontales de la malla
+    # Draw horizontal grid lines
     for yi in y:
         plt.plot(x, [yi]*len(x), color='black', linewidth=0.5)
 
-    # Opcional: mostrar puntos de los nodos
+    # Show node points
     plt.plot(X, Y, 'k.', markersize=2)
 
     plt.title(f"Structured mesh {Nx}x{Ny}", fontsize=20)
@@ -247,6 +250,7 @@ def velocity_magnitude(Nx, Ny, Lx, Ly, save_dir="sim_data_npz"):
         # Save each frame
         plt.savefig(f"velocity_magnitude/vel_mag_{idx:04d}.png")
         plt.close()
+    
     print("    > Velocity field complete. Frames saved in ./velocity_magnitude/") 
 
 def pressure_isolines(Nx, Ny, Lx, Ly, save_dir="sim_data_npz"):
@@ -290,6 +294,7 @@ def pressure_isolines(Nx, Ny, Lx, Ly, save_dir="sim_data_npz"):
         # Save frame
         plt.savefig(f"pressure_isolines/p_isolines_{idx:04d}.png")
         plt.close()
+    
     print("    > Pressure field complete. Frames saved in ./pressure_isolines/")
 
 def make_gif(fps=10):
@@ -304,6 +309,7 @@ def make_gif(fps=10):
 
                 output_gif = f"{folder}.gif"
                 imageio.mimsave(output_gif, images, fps=fps)
+                
                 print(f"      > GIF saved as {output_gif}")
 
 ############################################################################################################

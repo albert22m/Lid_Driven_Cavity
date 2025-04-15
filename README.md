@@ -11,7 +11,7 @@ The lid-driven cavity problem is a classic benchmark problem in computational fl
 - Finite difference discretization
 - RK4 for time integration of intermediate velocities
 - Projection method for incompressible flow
-- Numba-accelerated performance (`@njit`)
+- Numba-accelerated performance
 - NPZ binary file format for efficient data saving
 - Visualization using Matplotlib
 - Animated GIF creation of the velocity field
