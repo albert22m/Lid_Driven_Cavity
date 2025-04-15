@@ -1,6 +1,6 @@
 # Lid-Driven Cavity Flow Simulation
 
-This project numerically solves the **2D lid-driven cavity flow** using the **finite difference method**, with **RK4 (Runge-Kutta 4th order)** for time integration and a **projection method** to enforce incompressibility through the pressure Poisson equation.
+This project numerically solves the **2D lid-driven cavity flow** using the **finite difference method**, with **RK3/RK4 (Runge-Kutta 3rd/4th order)** for time integration and a **projection method** to enforce incompressibility through the pressure Poisson equation.
 
 ## Overview
 
@@ -9,7 +9,7 @@ The lid-driven cavity problem is a classic benchmark problem in computational fl
 ### Key Features
 
 - Finite difference discretization
-- RK4 for time integration of intermediate velocities
+- RK3/RK4 for time integration of intermediate velocities
 - Projection method for incompressible flow
 - Numba-accelerated performance
 - NPZ binary file format for efficient data saving
