@@ -20,11 +20,11 @@ The lid-driven cavity problem is a classic benchmark problem in computational fl
 
 ### Equations Solved
 
-- **Momentum Equations (Intermediate velocity)**
+- **Momentum Equation (Intermediate velocity)**
   
   $$\frac{\partial \vec{u}}{\partial t} + (\vec{u} \cdot \nabla)\vec{u} = -\nabla p + \nu \nabla^2 \vec{u}$$
 
-- **Incompressibility Constraint**
+- **Continuity Equation (Incompressibility Constraint)**
 
   $$\nabla \cdot \vec{u} = 0$$
 
@@ -43,7 +43,7 @@ The lid-driven cavity problem is a classic benchmark problem in computational fl
 
 ### Requirements
 
-- Python 3.x
+- Python 3.8
 - Numpy
 - Matplotlib
 - Numba
