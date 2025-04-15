@@ -347,7 +347,7 @@ else:
     u_final, v_final, p_final = simulate(u, v, p, dx, dy, dt, t_end, nu, rho, save_dir=npz_dir)
 
 # POSTPROCESSING ###########################################################################################
-plot_mesh(Lx, Ly, Nx, Ny, save_path="mesh.png")
-velocity_magnitude(Nx, Ny, Lx, Ly, save_dir=npz_dir)
-pressure_isolines(Nx, Ny, Lx, Ly, save_dir=npz_dir)
+plot_mesh(Lx, Ly, Nx, Ny)
+velocity_magnitude(Nx, Ny, Lx, Ly)
+pressure_isolines(Nx, Ny, Lx, Ly)
 make_gif(fps=10)
