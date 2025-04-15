@@ -1,6 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from numba import njit
+from numba import njit, prange
 import csv
 import os
 import imageio
@@ -21,14 +21,14 @@ def apply_boundary_conditions(u, v):
 
     return u, v
 
-@njit
+@njit(parallel=True)
 def compute_rhs(u, v, dx, dy, nu):
     # Allocate arrays for du/dt and dv/dt
     dudt = np.zeros_like(u)
     dvdt = np.zeros_like(v)
 
     # Internal domain (excluding boundaries)
-    for i in range(1, u.shape[0] - 1):
+    for i in prange(1, u.shape[0] - 1):
         for j in range(1, u.shape[1] - 1):
             # First-order convection terms (u ∂u/∂x + v ∂u/∂y)
             u_conv = u[i, j] * (u[i+1, j] - u[i-1, j]) / (2 * dx) + v[i, j] * (u[i, j+1] - u[i, j-1]) / (2 * dy)
@@ -65,63 +65,66 @@ def rk4_step(u, v, dt, dx, dy, nu):
 
     return u_new, v_new
 
-@njit
+@njit(parallel=True)
 def compute_divergence(u, v, dx, dy):
     div = np.zeros_like(u)
-    for i in range(1, u.shape[0] - 1):
+    for i in prange(1, u.shape[0] - 1):
         for j in range(1, u.shape[1] - 1):
             div[i, j] = ((u[i+1, j] - u[i-1, j]) / (2 * dx) +
                          (v[i, j+1] - v[i, j-1]) / (2 * dy))
     return div
 
-@njit
-def solve_pressure_poisson(p, div, dx, dy, rho, dt, max_iter=1000, tol=1e-4):
+@njit(parallel=True)
+def solve_pressure_poisson(p, div, dx, dy, rho, dt, max_iter=1000, tol=1e-4, omega=1.7):
+    dx2 = dx * dx
+    dy2 = dy * dy
+    denom = 2.0 * (dx2 + dy2)
+    
     for it in range(max_iter):
-        p_old = p.copy()
-        for i in range(1, p.shape[0] - 1):
+        res = 0.0
+        for i in prange(1, p.shape[0] - 1):
             for j in range(1, p.shape[1] - 1):
-                p[i, j] = ((dy**2 * (p[i+1, j] + p[i-1, j]) +
-                            dx**2 * (p[i, j+1] + p[i, j-1]) -
-                            rho * dx**2 * dy**2 * div[i, j] / dt) /
-                           (2 * (dx**2 + dy**2)))
+                rhs = ((dy2 * (p[i+1, j] + p[i-1, j]) +
+                        dx2 * (p[i, j+1] + p[i, j-1]) -
+                        rho * dx2 * dy2 * div[i, j] / dt) / denom)
+                diff = rhs - p[i, j]
+                p[i, j] += omega * diff
+                res += diff * diff
 
-        # Boundary conditions: Neumann (∂p/∂n = 0)
-        p[0, :] = p[1, :]           # Left
-        p[-1, :] = p[-2, :]         # Right
-        p[:, 0] = p[:, 1]           # Bottom
-        p[:, -1] = p[:, -2]         # Top
+        # Apply Neumann BCs (∂p/∂n = 0)
+        p[0, :] = p[1, :]
+        p[-1, :] = p[-2, :]
+        p[:, 0] = p[:, 1]
+        p[:, -1] = p[:, -2]
 
-        # Convergence check
-        res = np.linalg.norm(p - p_old, ord=2)
+        # Set pressure reference to zero at top-left corner (to avoid drift)
+        p[0, -1] = 0.0
+
+        # Check for convergence
+        res = np.sqrt(res) / (p.shape[0] * p.shape[1])
         if res < tol:
             break
+
     return p
 
-@njit
+@njit(parallel=True)
 def correct_velocity(u_star, v_star, p, dx, dy, rho, dt):
     u = u_star.copy()
     v = v_star.copy()
 
-    for i in range(1, u.shape[0] - 1):
+    for i in prange(1, u.shape[0] - 1):
         for j in range(1, u.shape[1] - 1):
             u[i, j] -= dt / rho * (p[i+1, j] - p[i-1, j]) / (2 * dx)
             v[i, j] -= dt / rho * (p[i, j+1] - p[i, j-1]) / (2 * dy)
     return u, v
 
-def simulate(u, v, p, dx, dy, dt, t_end, nu, rho, save_interval=100, csv_file_prefix="simulation_data"):
+def simulate(u, v, p, dx, dy, dt, t_end, nu, rho, save_interval=100, save_dir="sim_data_npz"):
     t = 0.0
     step = 0
+    frame = 0
 
-    # Open CSV files for writing u, v, p data
-    u_file = open(f'{csv_file_prefix}_u.csv', 'w', newline='')
-    v_file = open(f'{csv_file_prefix}_v.csv', 'w', newline='')
-    p_file = open(f'{csv_file_prefix}_p.csv', 'w', newline='')
-
-    # Create CSV writers
-    u_writer = csv.writer(u_file)
-    v_writer = csv.writer(v_file)
-    p_writer = csv.writer(p_file)
-
+    os.makedirs(save_dir, exist_ok=True)
+    
     while t < t_end:
         # Step 1: RK4 intermediate velocity (u*, v*)
         u_star, v_star = rk4_step(u, v, dt, dx, dy, nu)
@@ -145,42 +148,25 @@ def simulate(u, v, p, dx, dy, dt, t_end, nu, rho, save_interval=100, csv_file_pr
         t += dt
         step += 1
 
-        # Save data for animation and write to CSV
         if step % save_interval == 0:
-            # Write u, v, p to their respective CSV files
-            u_writer.writerow(u.flatten())  # Flatten the array to a single row
-            v_writer.writerow(v.flatten())  # Flatten the array to a single row
-            p_writer.writerow(p.flatten())  # Flatten the array to a single row
-
-    # Close the files after simulation
-    u_file.close()
-    v_file.close()
-    p_file.close()
+              np.savez_compressed(f"{save_dir}/frame_{frame:04d}.npz", u=u, v=v, p=p)
+              frame += 1
 
     return u, v, p
 
-def velocity_magnitude(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.0):
+def velocity_magnitude(save_dir="sim_data_npz", Nx=64, Ny=64, Lx=1.0, Ly=1.0):
     dx, dy = Lx / Nx, Ly / Ny
     x = np.linspace(0, Lx, Nx+1)
     y = np.linspace(0, Ly, Ny+1)
     X, Y = np.meshgrid(x, y, indexing='ij')
 
-    # Load CSV data
-    u_data = np.loadtxt(f"{csv_prefix}_u.csv", delimiter=",")
-    v_data = np.loadtxt(f"{csv_prefix}_v.csv", delimiter=",")
-    p_data = np.loadtxt(f"{csv_prefix}_p.csv", delimiter=",")
-
-    # Ensure data is 2D: (frames, flattened field)
-    if u_data.ndim == 1:
-        u_data = np.expand_dims(u_data, axis=0)
-        v_data = np.expand_dims(v_data, axis=0)
-        p_data = np.expand_dims(p_data, axis=0)
-
+    frame_files = sorted([f for f in os.listdir(save_dir) if f.endswith(".npz")])
     os.makedirs("velocity_magnitude", exist_ok=True)
 
-    for idx in range(u_data.shape[0]):
-        u = u_data[idx].reshape((Nx+1, Ny+1))
-        v = v_data[idx].reshape((Nx+1, Ny+1))
+    for idx, file in enumerate(frame_files):
+        data = np.load(os.path.join(save_dir, file))
+        u = data["u"]
+        v = data["v"]
         speed = np.sqrt(u**2 + v**2)
 
         plt.figure(figsize=(14, 12))
@@ -195,7 +181,7 @@ def velocity_magnitude(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.
         plt.quiver(X[::2, ::2], Y[::2, ::2], u[::2, ::2], v[::2, ::2], color='white', scale=5)
 
         # Titles and labels
-        plt.title(f"Velocity field (t = {(idx + 1)*dt*100})", fontsize=20)
+        plt.title(f"Velocity field (t = {((idx + 1) * dt * 100):.1f})", fontsize=20)
         plt.xlabel("x", fontsize=16)
         plt.ylabel("y", fontsize=16)
 
@@ -210,25 +196,20 @@ def velocity_magnitude(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.
         plt.savefig(f"velocity_magnitude/vel_mag_{idx:04d}.png")
         plt.close()
 
-    print("  > Velocity field complete. Frames saved in ./velocity_magnitude/")
+    print("    > Velocity field complete. Frames saved in ./velocity_magnitude/")
 
-def pressure_isolines(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.0):
+def pressure_isolines(save_dir="sim_data_npz", Nx=64, Ny=64, Lx=1.0, Ly=1.0):
     dx, dy = Lx / Nx, Ly / Ny
     x = np.linspace(0, Lx, Nx+1)
     y = np.linspace(0, Ly, Ny+1)
     X, Y = np.meshgrid(x, y, indexing='ij')
 
-    # Load CSV data
-    p_data = np.loadtxt(f"{csv_prefix}_p.csv", delimiter=",")
-
-    # Ensure data is 2D: (frames, flattened field)
-    if p_data.ndim == 1:
-        p_data = np.expand_dims(p_data, axis=0)
-
+    frame_files = sorted([f for f in os.listdir(save_dir) if f.endswith(".npz")])
     os.makedirs("pressure_isolines", exist_ok=True)
 
-    for idx in range(p_data.shape[0]):
-        p = p_data[idx].reshape((Nx+1, Ny+1))
+    for idx, file in enumerate(frame_files):
+        data = np.load(os.path.join(save_dir, file))
+        p = data["p"]
 
         plt.figure(figsize=(10, 8))
 
@@ -243,7 +224,7 @@ def pressure_isolines(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.0
         plt.clabel(lines, inline=True, fontsize=10, fmt="%.2f")
 
         # Titles and labels
-        plt.title(f"Pressure Field & Isolines (t = {(idx + 1)*dt*100})", fontsize=18)
+        plt.title(f"Pressure Field & Isolines (t = {((idx + 1) * dt * 100):.1f})", fontsize=20)
         plt.xlabel("x", fontsize=14)
         plt.ylabel("y", fontsize=14)
 
@@ -256,7 +237,7 @@ def pressure_isolines(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.0
         plt.savefig(f"pressure_isolines/p_isolines_{idx:04d}.png")
         plt.close()
 
-    print("  > Pressure field complete. Frames saved in ./pressure_isolines/")
+    print("    > Pressure field complete. Frames saved in ./pressure_isolines/")
 
 def make_gif(fps=10):
     for folder in os.listdir("."):
@@ -270,7 +251,7 @@ def make_gif(fps=10):
 
                 output_gif = f"{folder}.gif"
                 imageio.mimsave(output_gif, images, fps=fps)
-                print(f"  > GIF saved as {output_gif}")
+                print(f"      > GIF saved as {output_gif}")
 
 ############################################################################################################
 
@@ -281,7 +262,7 @@ dx, dy = Lx / Nx, Ly / Ny
 
 # Time parameters
 dt = 0.001
-t_end = 1.0
+t_end = 5.0
 nu = 0.01  # kinematic viscosity
 rho = 1.0  # density
 
@@ -295,18 +276,18 @@ u = np.zeros((Nx+1, Ny+1))  # x-velocity
 v = np.zeros((Nx+1, Ny+1))  # y-velocity
 p = np.zeros((Nx+1, Ny+1))  # pressure
 
-# Check for existing .csv files
-csv_files_exist = any(file.endswith('.csv') for file in os.listdir('.') if file.startswith('simulation_data'))
+# Check for existing .npz simulation data
+npz_dir = "sim_data_npz"
+data_files_exist = os.path.exists(npz_dir) and any(f.endswith(".npz") for f in os.listdir(npz_dir))
 
-if csv_files_exist:
-    print("  > u, v, P data found, skipping simulation and proceeding to postprocessing...")
+if data_files_exist:
+    print("  > Binary data found, skipping simulation and proceeding to postprocessing...")
 else:
     print("  > No data found, running simulation...")
-    # SIMULATION ###############################################################################################
     u, v = apply_boundary_conditions(u, v)
-    u_final, v_final, p_final = simulate(u, v, p, dx, dy, dt, t_end, nu, rho)
+    u_final, v_final, p_final = simulate(u, v, p, dx, dy, dt, t_end, nu, rho, save_dir=npz_dir)
 
 # POSTPROCESSING ###########################################################################################
-velocity_magnitude(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.0)
-pressure_isolines(csv_prefix="simulation_data", Nx=64, Ny=64, Lx=1.0, Ly=1.0)
+velocity_magnitude(save_dir=npz_dir, Nx=Nx, Ny=Ny, Lx=Lx, Ly=Ly)
+pressure_isolines(save_dir=npz_dir, Nx=Nx, Ny=Ny, Lx=Lx, Ly=Ly)
 make_gif(fps=10)
