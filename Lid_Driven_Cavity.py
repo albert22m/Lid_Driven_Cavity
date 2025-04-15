@@ -104,7 +104,6 @@ def solve_pressure_poisson(p, div, dx, dy, rho, dt, max_iter=1000, tol=1e-4, ome
         res = np.sqrt(res) / (p.shape[0] * p.shape[1])
         if res < tol:
             break
-
     return p
 
 @njit(parallel=True)
@@ -151,10 +150,9 @@ def simulate(u, v, p, dx, dy, dt, t_end, nu, rho, save_interval=100, save_dir="s
         if step % save_interval == 0:
               np.savez_compressed(f"{save_dir}/frame_{frame:04d}.npz", u=u, v=v, p=p)
               frame += 1
-
     return u, v, p
 
-def velocity_magnitude(save_dir="sim_data_npz", Nx=64, Ny=64, Lx=1.0, Ly=1.0):
+def velocity_magnitude(Nx, Ny, Lx, Ly, save_dir="sim_data_npz"):
     dx, dy = Lx / Nx, Ly / Ny
     x = np.linspace(0, Lx, Nx+1)
     y = np.linspace(0, Ly, Ny+1)
@@ -172,14 +170,23 @@ def velocity_magnitude(save_dir="sim_data_npz", Nx=64, Ny=64, Lx=1.0, Ly=1.0):
         plt.figure(figsize=(14, 12))
 
         # Plot contour
-        contour = plt.contourf(X, Y, speed, levels=50, cmap='viridis')
+        contour = plt.contourf(X, Y, speed, levels=50, cmap='viridis')  # cmap='plasma'
         cbar = plt.colorbar(contour, label='Velocity Magnitude', ticks=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fraction=0.046, pad=0.04)
         cbar.ax.tick_params(labelsize=14)
         cbar.set_label('Velocity Magnitude', fontsize=16)
 
         # Quiver plot
-        plt.quiver(X[::2, ::2], Y[::2, ::2], u[::2, ::2], v[::2, ::2], color='white', scale=5)
+        #plt.quiver(X[::2, ::2], Y[::2, ::2], u[::2, ::2], v[::2, ::2], color='white', scale=5)
 
+        # Streamplot
+        plt.streamplot(X.T[::2, ::2], Y.T[::2, ::2], u.T[::2, ::2], v.T[::2, ::2],
+            color='white',       # Color of streamlines
+            linewidth=1,         # Thickness of lines
+            density=1.5,         # Controls how many lines are drawn
+            arrowsize=1,         # Size of arrows on streamlines
+            arrowstyle='->'      # Arrow style (can be '-' for no arrowheads)
+        )
+        
         # Titles and labels
         plt.title(f"Velocity field (t = {((idx + 1) * dt * 100):.1f})", fontsize=20)
         plt.xlabel("x", fontsize=16)
@@ -189,16 +196,21 @@ def velocity_magnitude(save_dir="sim_data_npz", Nx=64, Ny=64, Lx=1.0, Ly=1.0):
         plt.xticks(fontsize=14)
         plt.yticks(fontsize=14)
 
+        # Set the aspect ratio to be equal
         plt.axis('equal')
+        
+        # Set consistent axis limits
+        plt.xlim(0, Lx)
+        plt.ylim(0, Ly)
+
         plt.tight_layout()
 
         # Save each frame
         plt.savefig(f"velocity_magnitude/vel_mag_{idx:04d}.png")
         plt.close()
+    print("    > Velocity field complete. Frames saved in ./velocity_magnitude/") 
 
-    print("    > Velocity field complete. Frames saved in ./velocity_magnitude/")
-
-def pressure_isolines(save_dir="sim_data_npz", Nx=64, Ny=64, Lx=1.0, Ly=1.0):
+def pressure_isolines(Nx, Ny, Lx, Ly, save_dir="sim_data_npz"):
     dx, dy = Lx / Nx, Ly / Ny
     x = np.linspace(0, Lx, Nx+1)
     y = np.linspace(0, Ly, Ny+1)
@@ -211,13 +223,13 @@ def pressure_isolines(save_dir="sim_data_npz", Nx=64, Ny=64, Lx=1.0, Ly=1.0):
         data = np.load(os.path.join(save_dir, file))
         p = data["p"]
 
-        plt.figure(figsize=(10, 8))
+        plt.figure(figsize=(14, 12))
 
         # Filled background pressure field
         filled = plt.contourf(X, Y, p, levels=50, cmap='coolwarm')
         cbar = plt.colorbar(filled, label='Pressure', fraction=0.046, pad=0.04)
-        cbar.ax.tick_params(labelsize=12)
-        cbar.set_label('Pressure', fontsize=14)
+        cbar.ax.tick_params(labelsize=14)
+        cbar.set_label('Pressure', fontsize=16)
 
         # Pressure isolines
         lines = plt.contour(X, Y, p, levels=20, colors='black', linewidths=0.5)
@@ -225,18 +237,20 @@ def pressure_isolines(save_dir="sim_data_npz", Nx=64, Ny=64, Lx=1.0, Ly=1.0):
 
         # Titles and labels
         plt.title(f"Pressure Field & Isolines (t = {((idx + 1) * dt * 100):.1f})", fontsize=20)
-        plt.xlabel("x", fontsize=14)
-        plt.ylabel("y", fontsize=14)
+        plt.xlabel("x", fontsize=16)
+        plt.ylabel("y", fontsize=16)
 
-        plt.xticks(fontsize=12)
-        plt.yticks(fontsize=12)
+        # Fix plot scaling
+        plt.xticks(fontsize=14)
+        plt.yticks(fontsize=14)
         plt.axis('equal')
+        plt.xlim(0, Lx)
+        plt.ylim(0, Ly)
         plt.tight_layout()
 
         # Save frame
         plt.savefig(f"pressure_isolines/p_isolines_{idx:04d}.png")
         plt.close()
-
     print("    > Pressure field complete. Frames saved in ./pressure_isolines/")
 
 def make_gif(fps=10):
@@ -288,6 +302,6 @@ else:
     u_final, v_final, p_final = simulate(u, v, p, dx, dy, dt, t_end, nu, rho, save_dir=npz_dir)
 
 # POSTPROCESSING ###########################################################################################
-velocity_magnitude(save_dir=npz_dir, Nx=Nx, Ny=Ny, Lx=Lx, Ly=Ly)
-pressure_isolines(save_dir=npz_dir, Nx=Nx, Ny=Ny, Lx=Lx, Ly=Ly)
+velocity_magnitude(Nx, Ny, Lx, Ly, save_dir=npz_dir)
+pressure_isolines(Nx, Ny, Lx, Ly, save_dir=npz_dir)
 make_gif(fps=10)
