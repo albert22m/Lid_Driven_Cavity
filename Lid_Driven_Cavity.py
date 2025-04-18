@@ -6,7 +6,7 @@ import os
 import imageio
 
 # Apply boundary conditions
-def apply_boundary_conditions(u, v):
+def boundary_conditions(u, v):
     # === u velocity boundaries ===
     u[0, :] = 0            # Left wall (x = 0)
     u[-1, :] = 0           # Right wall (x = Lx)
@@ -87,7 +87,7 @@ def RK4(u, v, dt, dx, dy, nu):
     return u_new, v_new
 
 @njit(parallel=True)
-def compute_divergence(u, v, dx, dy):
+def divergence(u, v, dx, dy):
     div = np.zeros_like(u)
     for i in prange(1, u.shape[0] - 1):
         for j in range(1, u.shape[1] - 1):
@@ -96,7 +96,7 @@ def compute_divergence(u, v, dx, dy):
     return div
 
 @njit(parallel=True)
-def solve_pressure_poisson(p, div, dx, dy, rho, dt, max_iter=1000, tol=1e-4, omega=1.7):
+def pressure_poisson(p, div, dx, dy, rho, dt, max_iter=1000, tol=1e-4, omega=1.7):
     dx2 = dx * dx
     dy2 = dy * dy
     denom = 2.0 * (dx2 + dy2)
@@ -157,19 +157,19 @@ def simulate(u, v, p, dx, dy, dt, t_end, nu, rho, method, save_interval=100, sav
         u_star, v_star = time_stepper(u, v, dt, dx, dy, nu)
 
         # Step 2: Apply boundary conditions to intermediate velocity
-        u_star, v_star = apply_boundary_conditions(u_star, v_star)
+        u_star, v_star = boundary_conditions(u_star, v_star)
 
         # Step 3: Compute divergence of intermediate velocity
-        div = compute_divergence(u_star, v_star, dx, dy)
+        div = divergence(u_star, v_star, dx, dy)
 
         # Step 4: Solve pressure Poisson equation
-        p = solve_pressure_poisson(p, div, dx, dy, rho, dt)
+        p = pressure_poisson(p, div, dx, dy, rho, dt)
 
         # Step 5: Correct velocity to make it divergence-free
         u, v = correct_velocity(u_star, v_star, p, dx, dy, rho, dt)
 
         # Step 6: Apply boundary conditions again (important after correction)
-        u, v = apply_boundary_conditions(u, v)
+        u, v = boundary_conditions(u, v)
 
         # Time update
         t += dt
@@ -275,7 +275,7 @@ def velocity_magnitude(Nx, Ny, Lx, Ly, save_dir="sim_data_npz"):
         plt.savefig(f"velocity_magnitude/vel_mag_{idx:04d}.png")
         plt.close()
     
-    print("    > Velocity field complete. Frames saved in ./velocity_magnitude/") 
+    print("    > Velocity field complete. Frames saved in ./velocity_magnitude/")
 
 def pressure_isolines(Nx, Ny, Lx, Ly, save_dir="sim_data_npz"):
     dx, dy = Lx / Nx, Ly / Ny
@@ -340,11 +340,11 @@ def make_gif(fps=10):
 
 # Domain parameters
 Lx, Ly = 1.0, 1.0
-Nx, Ny = 64, 64
+Nx, Ny = 128, 128
 dx, dy = Lx / Nx, Ly / Ny
 
 # Time parameters
-dt = 0.001
+dt = 0.0005
 t_end = 5.0
 nu = 0.01  # kinematic viscosity
 rho = 1.0  # density
@@ -353,6 +353,7 @@ rho = 1.0  # density
 x = np.linspace(0, Lx, Nx+1)
 y = np.linspace(0, Ly, Ny+1)
 X, Y = np.meshgrid(x, y, indexing='ij')
+plot_mesh(Lx, Ly, Nx, Ny)
 
 # Initialize fields
 u = np.zeros((Nx+1, Ny+1))  # x-velocity
@@ -366,11 +367,10 @@ if data_files_exist:
     print("  > Binary data found, skipping asimulation and proceeding to postprocessing...")
 else:
     print("  > No data found, running simulation...")
-    u, v = apply_boundary_conditions(u, v)
+    u, v = boundary_conditions(u, v)
     u_final, v_final, p_final = simulate(u, v, p, dx, dy, dt, t_end, nu, rho, method='RK4')
 
 # POSTPROCESSING ###########################################################################################
-plot_mesh(Lx, Ly, Nx, Ny)
 velocity_magnitude(Nx, Ny, Lx, Ly)
 pressure_isolines(Nx, Ny, Lx, Ly)
 make_gif(fps=10)
