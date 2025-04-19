@@ -96,11 +96,12 @@ def divergence(u, v, dx, dy):
     return div
 
 @njit(parallel=True)
-def pressure_poisson(p, div, dx, dy, rho, dt, max_iter=1000, tol=1e-4, omega=1.7):
+def pressure_poisson(p, div, dx, dy, rho, dt, max_iter=1000, tol=1e-6, omega=1.7):
     dx2 = dx * dx
     dy2 = dy * dy
     denom = 2.0 * (dx2 + dy2)
-    
+    omega = min(2.0 / (1.0 + np.sqrt(1.0 - (np.sin(np.pi * dx / p.shape[0])**2 + np.sin(np.pi * dy / p.shape[1])**2) / 2.0)), 1.99)
+
     for it in range(max_iter):
         res = 0.0
         for i in prange(1, p.shape[0] - 1):
@@ -248,7 +249,7 @@ def velocity_magnitude(Nx, Ny, Lx, Ly, save_dir="sim_data_npz"):
         plt.streamplot(X.T[::2, ::2], Y.T[::2, ::2], u.T[::2, ::2], v.T[::2, ::2],
             color='white',       # Color of streamlines
             linewidth=1,         # Thickness of lines
-            density=1.5,         # Controls how many lines are drawn
+            density=1.4,         # Controls how many lines are drawn
             arrowsize=1,         # Size of arrows on streamlines
             arrowstyle='->'      # Arrow style (can be '-' for no arrowheads)
         )
@@ -345,7 +346,7 @@ dx, dy = Lx / Nx, Ly / Ny
 
 # Time parameters
 dt = 0.0005
-t_end = 5.0
+t_end = 10.0
 nu = 0.01  # kinematic viscosity
 rho = 1.0  # density
 
