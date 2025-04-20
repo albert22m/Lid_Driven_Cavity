@@ -172,7 +172,6 @@ def simulate(u, v, p, dx, dy, dt, t_end, nu, rho, method, save_interval=100, sav
         # Step 6: Apply boundary conditions again (important after correction)
         u, v = boundary_conditions(u, v)
 
-        # Time update
         t += dt
         step += 1
 
@@ -247,11 +246,11 @@ def velocity_magnitude(Nx, Ny, Lx, Ly, save_dir="sim_data_npz"):
 
         # Streamplot
         plt.streamplot(X.T[::2, ::2], Y.T[::2, ::2], u.T[::2, ::2], v.T[::2, ::2],
-            color='white',       # Color of streamlines
-            linewidth=1,         # Thickness of lines
-            density=1.4,         # Controls how many lines are drawn
-            arrowsize=1,         # Size of arrows on streamlines
-            arrowstyle='->'      # Arrow style (can be '-' for no arrowheads)
+            color='white',
+            linewidth=1,
+            density=1.4,
+            arrowsize=1,
+            arrowstyle='->'
         )
         
         # Titles and labels
@@ -365,7 +364,7 @@ p = np.zeros((Nx+1, Ny+1))  # pressure
 data_files_exist = os.path.exists("sim_data_npz") and any(f.endswith(".npz") for f in os.listdir("sim_data_npz"))
 
 if data_files_exist:
-    print("  > Binary data found, skipping asimulation and proceeding to postprocessing...")
+    print("  > Binary data found, skipping simulation and proceeding to postprocessing...")
 else:
     print("  > No data found, running simulation...")
     u, v = boundary_conditions(u, v)
