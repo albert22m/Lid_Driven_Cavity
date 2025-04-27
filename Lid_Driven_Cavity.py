@@ -1,7 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from numba import njit, prange
-import csv
 import os
 import imageio
 
@@ -96,37 +95,42 @@ def divergence(u, v, dx, dy):
     return div
 
 @njit(parallel=True)
-def pressure_poisson(p, div, dx, dy, rho, dt, max_iter=1000, tol=1e-6, omega=1.7):
+def pressure_poisson(p, div, dx, dy, rho, dt, max_iter=1000, tol=1e-6):
     dx2 = dx * dx
     dy2 = dy * dy
     denom = 2.0 * (dx2 + dy2)
-    omega = min(2.0 / (1.0 + np.sqrt(1.0 - (np.sin(np.pi * dx / p.shape[0])**2 + np.sin(np.pi * dy / p.shape[1])**2) / 2.0)), 1.99)
+    
+    p_new = np.copy(p)
 
     for it in range(max_iter):
         res = 0.0
+
+        # Jacobi iteration
         for i in prange(1, p.shape[0] - 1):
             for j in range(1, p.shape[1] - 1):
                 rhs = ((dy2 * (p[i+1, j] + p[i-1, j]) +
                         dx2 * (p[i, j+1] + p[i, j-1]) -
                         rho * dx2 * dy2 * div[i, j] / dt) / denom)
                 diff = rhs - p[i, j]
-                p[i, j] += omega * diff
+                p_new[i, j] = p[i, j] + diff
                 res += diff * diff
 
         # Apply Neumann BCs (∂p/∂n = 0)
-        p[0, :] = p[1, :]
-        p[-1, :] = p[-2, :]
-        p[:, 0] = p[:, 1]
-        p[:, -1] = p[:, -2]
+        p_new[0, :] = p_new[1, :]
+        p_new[-1, :] = p_new[-2, :]
+        p_new[:, 0] = p_new[:, 1]
+        p_new[:, -1] = p_new[:, -2]
 
-        # Set pressure reference to zero at top-left corner (to avoid drift)
-        p[0, -1] = 0.0
+        # Set pressure reference
+        p_new[0, -1] = 0.0
 
-        # Check for convergence
         res = np.sqrt(res) / (p.shape[0] * p.shape[1])
         if res < tol:
             break
-    
+
+        # Swap arrays
+        p, p_new = p_new, p
+
     return p
 
 @njit(parallel=True)
