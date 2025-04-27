@@ -41,9 +41,9 @@ The lid-driven cavity problem is a classic benchmark problem in computational fl
 
 ## References
 
-  [1]  Jofre, L., Abdellatif, A., & Oyarzun, G. (2023). *RHEA: an open-source Reproducible Hybrid-architecture flow solver Engineered for Academia*. "Journal of Open Source Software", 13 Gener 2023, vol. 8(81), núm. 4637, p. 1-6.   
-  [2]  Moin, P. *Fundamentals of Engineering Numerical Analysis*. "Cambridge University Press", 2010.  
-  [3]  Pope, S. B. *Turbulent Flows*. "Cambridge University Press", 2000.  
-  [4]  Vermeire, B. C., Pereira, C. A., & Karbasian, H. *Computational Fluid Dynamics: An Open-Source Approach*. "Concordia University", 2020.  
-  [5]  Hager, G., & Wellein, G. *Introduction to High Performance Computing for Scientists and Engineers*. "CRC Press", 2011.  
-  [6]  Manneville, P. *Instabilities, Chaos and Turbulence: An Introduction to Nonlinear Dynamics and Complex Systems*. "Imperial College Press", 2004.  
+- Jofre, L., Abdellatif, A., & Oyarzun, G. (2023). *RHEA: an open-source Reproducible Hybrid-architecture flow solver Engineered for Academia*. "Journal of Open Source Software", 13 Gener 2023, vol. 8(81), núm. 4637, p. 1-6.
+- Moin, P. *Fundamentals of Engineering Numerical Analysis*. "Cambridge University Press", 2010.
+- Pope, S. B. *Turbulent Flows*. "Cambridge University Press", 2000.
+- Vermeire, B. C., Pereira, C. A., & Karbasian, H. *Computational Fluid Dynamics: An Open-Source Approach*. "Concordia University", 2020.
+- Hager, G., & Wellein, G. *Introduction to High Performance Computing for Scientists and Engineers*. "CRC Press", 2011.
+- Manneville, P. *Instabilities, Chaos and Turbulence: An Introduction to Nonlinear Dynamics and Complex Systems*. "Imperial College Press", 2004.
