@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from numba import njit, prange
 import os
 import imageio
+from concurrent.futures import ProcessPoolExecutor
 
 # Apply boundary conditions
 def boundary_conditions(u, v):
@@ -54,25 +55,25 @@ def RK3(u, v, dt, dx, dy, nu):
 
     # Stage 2
     dudt2, dvdt2 = RHS(u1, v1, dx, dy, nu)
-    u2 = 0.75 * u + 0.25 * (u1 + dt * dudt2)
-    v2 = 0.75 * v + 0.25 * (v1 + dt * dvdt2)
+    u2 = 3/4 * u + 1/4 * (u1 + dt * dudt2)
+    v2 = 3/4 * v + 1/4 * (v1 + dt * dvdt2)
 
     # Stage 3
     dudt3, dvdt3 = RHS(u2, v2, dx, dy, nu)
-    u_new = (1.0 / 3.0) * u + (2.0 / 3.0) * (u2 + dt * dudt3)
-    v_new = (1.0 / 3.0) * v + (2.0 / 3.0) * (v2 + dt * dvdt3)
+    u = 1/3 * u + 2/3 * (u2 + dt * dudt3)
+    v = 1/3 * v + 2/3 * (v2 + dt * dvdt3)
 
-    return u_new, v_new
+    return u, v
 
 # Runge-Kutta 4
 def RK4(u, v, dt, dx, dy, nu):
     dudt1, dvdt1 = RHS(u, v, dx, dy, nu)
-    u1 = u + 0.5 * dt * dudt1
-    v1 = v + 0.5 * dt * dvdt1
+    u1 = u + 1/2 * dt * dudt1
+    v1 = v + 1/2 * dt * dvdt1
 
     dudt2, dvdt2 = RHS(u1, v1, dx, dy, nu)
-    u2 = u + 0.5 * dt * dudt2
-    v2 = v + 0.5 * dt * dvdt2
+    u2 = u + 1/2 * dt * dudt2
+    v2 = v + 1/2 * dt * dvdt2
 
     dudt3, dvdt3 = RHS(u2, v2, dx, dy, nu)
     u3 = u + dt * dudt3
@@ -80,10 +81,10 @@ def RK4(u, v, dt, dx, dy, nu):
 
     dudt4, dvdt4 = RHS(u3, v3, dx, dy, nu)
 
-    u_new = u + (dt / 6.0) * (dudt1 + 2*dudt2 + 2*dudt3 + dudt4)
-    v_new = v + (dt / 6.0) * (dvdt1 + 2*dvdt2 + 2*dvdt3 + dvdt4)
+    u += dt/6 * (dudt1 + 2*dudt2 + 2*dudt3 + dudt4)
+    v += dt/6 * (dvdt1 + 2*dvdt2 + 2*dvdt3 + dvdt4)
 
-    return u_new, v_new
+    return u, v
 
 @njit(parallel=True)
 def divergence(u, v, dx, dy):
@@ -134,10 +135,7 @@ def pressure_poisson(p, div, dx, dy, rho, dt, max_iter=1000, tol=1e-6):
     return p
 
 @njit(parallel=True)
-def correct_velocity(u_star, v_star, p, dx, dy, rho, dt):
-    u = u_star.copy()
-    v = v_star.copy()
-
+def correct_velocity(u, v, p, dx, dy, rho, dt):
     for i in prange(1, u.shape[0] - 1):
         for j in range(1, u.shape[1] - 1):
             u[i, j] -= dt / rho * (p[i+1, j] - p[i-1, j]) / (2 * dx)
@@ -159,19 +157,19 @@ def simulate(u, v, p, dx, dy, dt, t_end, nu, rho, method, save_interval=100, sav
     
     while t < t_end:
         # Step 1: RK intermediate velocity (u*, v*)
-        u_star, v_star = time_stepper(u, v, dt, dx, dy, nu)
+        u, v = time_stepper(u, v, dt, dx, dy, nu)
 
         # Step 2: Apply boundary conditions to intermediate velocity
-        u_star, v_star = boundary_conditions(u_star, v_star)
+        u, v = boundary_conditions(u, v)
 
         # Step 3: Compute divergence of intermediate velocity
-        div = divergence(u_star, v_star, dx, dy)
+        div = divergence(u, v, dx, dy)
 
         # Step 4: Solve pressure Poisson equation
         p = pressure_poisson(p, div, dx, dy, rho, dt)
 
         # Step 5: Correct velocity to make it divergence-free
-        u, v = correct_velocity(u_star, v_star, p, dx, dy, rho, dt)
+        u, v = correct_velocity(u, v, p, dx, dy, rho, dt)
 
         # Step 6: Apply boundary conditions again (important after correction)
         u, v = boundary_conditions(u, v)
@@ -222,108 +220,75 @@ def plot_mesh(Lx, Ly, Nx, Ny, save_path="mesh.png"):
     plt.savefig(save_path)
     plt.close()
 
-def velocity_magnitude(Nx, Ny, Lx, Ly, save_dir="sim_data_npz"):
+def velocity_magnitude(args):
+    idx, file_path, Nx, Ny, Lx, Ly, dt = args
     dx, dy = Lx / Nx, Ly / Ny
     x = np.linspace(0, Lx, Nx+1)
     y = np.linspace(0, Ly, Ny+1)
     X, Y = np.meshgrid(x, y, indexing='ij')
 
-    frame_files = sorted([f for f in os.listdir(save_dir) if f.endswith(".npz")])
+    data = np.load(file_path)
+    u, v = data["u"], data["v"]
+    speed = np.sqrt(u**2 + v**2)
+
+    plt.figure(figsize=(14, 12))
+    contour = plt.contourf(X, Y, speed, levels=50, cmap='viridis')
+    cbar = plt.colorbar(contour, fraction=0.046, pad=0.04)
+    cbar.set_label('Velocity Magnitude', fontsize=16)
+    cbar.ax.tick_params(labelsize=14)
+
+    # Quiver plot
+    #plt.quiver(X[::2, ::2], Y[::2, ::2], u[::2, ::2], v[::2, ::2], color='white', scale=5)
+
+    plt.streamplot(X.T[::2, ::2], Y.T[::2, ::2], u.T[::2, ::2], v.T[::2, ::2],
+                   color='white', linewidth=1, density=1.4, arrowsize=1, arrowstyle='->')
+
+    plt.title(f"Velocity field (t = {((idx + 1) * dt * 100):.1f})", fontsize=20)
+    plt.xlabel("x", fontsize=16)
+    plt.ylabel("y", fontsize=16)
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    plt.axis('equal')
+    plt.xlim(0, Lx)
+    plt.ylim(0, Ly)
+    plt.tight_layout()
+
     os.makedirs("velocity_magnitude", exist_ok=True)
+    plt.savefig(f"velocity_magnitude/vel_mag_{idx:04d}.png")
+    plt.close()
 
-    for idx, file in enumerate(frame_files):
-        data = np.load(os.path.join(save_dir, file))
-        u = data["u"]
-        v = data["v"]
-        speed = np.sqrt(u**2 + v**2)
-
-        plt.figure(figsize=(14, 12))
-
-        # Plot contour
-        contour = plt.contourf(X, Y, speed, levels=50, cmap='viridis')  # cmap='plasma'
-        cbar = plt.colorbar(contour, label='Velocity Magnitude', ticks=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0], fraction=0.046, pad=0.04)
-        cbar.ax.tick_params(labelsize=14)
-        cbar.set_label('Velocity Magnitude', fontsize=16)
-
-        # Quiver plot
-        #plt.quiver(X[::2, ::2], Y[::2, ::2], u[::2, ::2], v[::2, ::2], color='white', scale=5)
-
-        # Streamplot
-        plt.streamplot(X.T[::2, ::2], Y.T[::2, ::2], u.T[::2, ::2], v.T[::2, ::2],
-            color='white',
-            linewidth=1,
-            density=1.4,
-            arrowsize=1,
-            arrowstyle='->'
-        )
-        
-        # Titles and labels
-        plt.title(f"Velocity field (t = {((idx + 1) * dt * 100):.1f})", fontsize=20)
-        plt.xlabel("x", fontsize=16)
-        plt.ylabel("y", fontsize=16)
-
-        # Tick labels
-        plt.xticks(fontsize=14)
-        plt.yticks(fontsize=14)
-
-        # Set the aspect ratio to be equal
-        plt.axis('equal')
-        
-        # Set consistent axis limits
-        plt.xlim(0, Lx)
-        plt.ylim(0, Ly)
-
-        plt.tight_layout()
-
-        # Save each frame
-        plt.savefig(f"velocity_magnitude/vel_mag_{idx:04d}.png")
-        plt.close()
-    
-    print("    > Velocity field complete. Frames saved in ./velocity_magnitude/")
-
-def pressure_isolines(Nx, Ny, Lx, Ly, save_dir="sim_data_npz"):
+def pressure_isolines(args):
+    idx, file_path, Nx, Ny, Lx, Ly, dt = args
     dx, dy = Lx / Nx, Ly / Ny
     x = np.linspace(0, Lx, Nx+1)
     y = np.linspace(0, Ly, Ny+1)
     X, Y = np.meshgrid(x, y, indexing='ij')
 
-    frame_files = sorted([f for f in os.listdir(save_dir) if f.endswith(".npz")])
+    data = np.load(file_path)
+    p = data["p"]
+
+    plt.figure(figsize=(14, 12))
+    filled = plt.contourf(X, Y, p, levels=50, cmap='coolwarm')
+    cbar = plt.colorbar(filled, fraction=0.046, pad=0.04)
+    cbar.set_label('Pressure', fontsize=16)
+    cbar.ax.tick_params(labelsize=14)
+
+    lines = plt.contour(X, Y, p, levels=20, colors='black', linewidths=0.5)
+    plt.clabel(lines, inline=True, fontsize=10, fmt="%.2f")
+
+    plt.title(f"Pressure Field & Isolines (t = {((idx + 1) * dt * 100):.1f})", fontsize=20)
+    plt.xlabel("x", fontsize=16)
+    plt.ylabel("y", fontsize=16)
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    plt.axis('equal')
+    plt.xlim(0, Lx)
+    plt.ylim(0, Ly)
+    plt.tight_layout()
+
     os.makedirs("pressure_isolines", exist_ok=True)
-
-    for idx, file in enumerate(frame_files):
-        data = np.load(os.path.join(save_dir, file))
-        p = data["p"]
-
-        plt.figure(figsize=(14, 12))
-
-        # Filled background pressure field
-        filled = plt.contourf(X, Y, p, levels=50, cmap='coolwarm')
-        cbar = plt.colorbar(filled, label='Pressure', fraction=0.046, pad=0.04)
-        cbar.ax.tick_params(labelsize=14)
-        cbar.set_label('Pressure', fontsize=16)
-
-        # Pressure isolines
-        lines = plt.contour(X, Y, p, levels=20, colors='black', linewidths=0.5)
-        plt.clabel(lines, inline=True, fontsize=10, fmt="%.2f")
-
-        # Titles and labels
-        plt.title(f"Pressure Field & Isolines (t = {((idx + 1) * dt * 100):.1f})", fontsize=20)
-        plt.xlabel("x", fontsize=16)
-        plt.ylabel("y", fontsize=16)
-
-        # Fix plot scaling
-        plt.xticks(fontsize=14)
-        plt.yticks(fontsize=14)
-        plt.axis('equal')
-        plt.xlim(0, Lx)
-        plt.ylim(0, Ly)
-        plt.tight_layout()
-
-        # Save frame
-        plt.savefig(f"pressure_isolines/p_isolines_{idx:04d}.png")
-        plt.close()
-    
-    print("    > Pressure field complete. Frames saved in ./pressure_isolines/")
+    plt.savefig(f"pressure_isolines/p_isolines_{idx:04d}.png")
+    plt.close()
 
 def make_gif(fps=10):
     for folder in os.listdir("."):
@@ -375,6 +340,14 @@ else:
     u_final, v_final, p_final = simulate(u, v, p, dx, dy, dt, t_end, nu, rho, method='RK4')
 
 # POSTPROCESSING ###########################################################################################
-velocity_magnitude(Nx, Ny, Lx, Ly)
-pressure_isolines(Nx, Ny, Lx, Ly)
+frame_files = sorted([f for f in os.listdir("sim_data_npz") if f.endswith(".npz")])
+file_paths = [os.path.join("sim_data_npz", f) for f in frame_files]
+args_v = [(i, path, Nx, Ny, Lx, Ly, dt) for i, path in enumerate(file_paths)]
+args_p = [(i, path, Nx, Ny, Lx, Ly, dt) for i, path in enumerate(file_paths)]
+
+# Run both in parallel
+with ProcessPoolExecutor() as executor:
+    executor.map(velocity_magnitude, args_v)
+    executor.map(pressure_isolines, args_p)
+
 make_gif(fps=10)
