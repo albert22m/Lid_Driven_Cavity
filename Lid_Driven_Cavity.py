@@ -55,25 +55,25 @@ def RK3(u, v, dt, dx, dy, nu):
 
     # Stage 2
     dudt2, dvdt2 = RHS(u1, v1, dx, dy, nu)
-    u2 = 3/4 * u + 1/4 * (u1 + dt * dudt2)
-    v2 = 3/4 * v + 1/4 * (v1 + dt * dvdt2)
+    u2 = 0.75 * u + 0.25 * (u1 + dt * dudt2)
+    v2 = 0.75 * v + 0.25 * (v1 + dt * dvdt2)
 
     # Stage 3
     dudt3, dvdt3 = RHS(u2, v2, dx, dy, nu)
-    u = 1/3 * u + 2/3 * (u2 + dt * dudt3)
-    v = 1/3 * v + 2/3 * (v2 + dt * dvdt3)
+    u = u/3 + 2/3 * (u2 + dt * dudt3)
+    v = v/3 + 2/3 * (v2 + dt * dvdt3)
 
     return u, v
 
 # Runge-Kutta 4
 def RK4(u, v, dt, dx, dy, nu):
     dudt1, dvdt1 = RHS(u, v, dx, dy, nu)
-    u1 = u + 1/2 * dt * dudt1
-    v1 = v + 1/2 * dt * dvdt1
+    u1 = u + 0.5 * dt * dudt1
+    v1 = v + 0.5 * dt * dvdt1
 
     dudt2, dvdt2 = RHS(u1, v1, dx, dy, nu)
-    u2 = u + 1/2 * dt * dudt2
-    v2 = v + 1/2 * dt * dvdt2
+    u2 = u + 0.5 * dt * dudt2
+    v2 = v + 0.5 * dt * dvdt2
 
     dudt3, dvdt3 = RHS(u2, v2, dx, dy, nu)
     u3 = u + dt * dudt3
@@ -101,7 +101,7 @@ def pressure_poisson(p, div, dx, dy, rho, dt, max_iter=1000, tol=1e-6):
     dy2 = dy * dy
     denom = 2.0 * (dx2 + dy2)
     
-    p_new = np.copy(p)
+    p_new = np.zeros_like(p)
 
     for it in range(max_iter):
         res = 0.0
@@ -235,6 +235,7 @@ def velocity_magnitude(args):
     contour = plt.contourf(X, Y, speed, levels=50, cmap='viridis')
     cbar = plt.colorbar(contour, fraction=0.046, pad=0.04)
     cbar.set_label('Velocity Magnitude', fontsize=16)
+    cbar.set_ticks(np.linspace(0, 1, 6))
     cbar.ax.tick_params(labelsize=14)
 
     # Quiver plot
@@ -290,20 +291,21 @@ def pressure_isolines(args):
     plt.savefig(f"pressure_isolines/p_isolines_{idx:04d}.png")
     plt.close()
 
-def make_gif(fps=10):
+def make_video(fps=10):
     for folder in os.listdir("."):
         if os.path.isdir(folder):
             frame_files = sorted([f for f in os.listdir(folder) if f.endswith(".png")])
             if frame_files:
-                images = []
+                output_video = f"{folder}.mp4"
+                writer = imageio.get_writer(output_video, fps=fps, codec='libx264', quality=8, macro_block_size=None)
+
                 for filename in frame_files:
                     filepath = os.path.join(folder, filename)
-                    images.append(imageio.v2.imread(filepath))  # Avoid deprecation warning
+                    image = imageio.v2.imread(filepath)
+                    writer.append_data(image)
 
-                output_gif = f"{folder}.gif"
-                imageio.mimsave(output_gif, images, fps=fps)
-                
-                print(f"      > GIF saved as {output_gif}")
+                writer.close()
+                print(f"      > Video saved as {output_video}")
 
 ############################################################################################################
 
@@ -350,4 +352,4 @@ with ProcessPoolExecutor() as executor:
     executor.map(velocity_magnitude, args_v)
     executor.map(pressure_isolines, args_p)
 
-make_gif(fps=10)
+make_video()
